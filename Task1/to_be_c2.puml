@@ -1,0 +1,131 @@
+@startuml C2_GoFuture_ToBe
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Container Diagram To-Be (C2)
+
+Person(passenger, "Пассажир", "Заказывает поездки, оплачивает поездки, получает уведомления")
+Person(driver, "Водитель", "Принимает поездки, обновляет статус, получает выплаты")
+Person(corporate_client, "Корпоративный клиент", "Управляет корпоративными поездками и отчётностью")
+Person(partner, "Партнёр / внешний разработчик", "Интегрируется с платформой через публичные API")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    Container(passenger_app, "Passenger Mobile App", "iOS / Android / Huawei", "Мобильное приложение пассажира")
+    Container(driver_app, "Driver Mobile App", "iOS / Android / Huawei", "Мобильное приложение водителя")
+    Container(corporate_portal, "Corporate Portal", "React / Vue.js", "Веб-портал для корпоративных клиентов")
+
+    Container(api_gateway, "API Gateway", "NGINX / Envoy", "Единая точка входа, маршрутизация, rate limiting, auth, API versioning")
+    Container(legacy_adapter, "Legacy Compatibility Layer", "Adapter / Facade", "Обеспечение обратной совместимости со старыми API и маршрутизация части запросов в монолит")
+    Container(legacy_monolith, "Legacy Django Monolith", "Django", "Оставшаяся функциональность монолита на переходный период")
+
+    Container(booking_service, "Booking Service", "Microservice", "Создание и управление жизненным циклом поездки")
+    Container(driver_service, "Driver Service", "Microservice", "Профили водителей, доступность, статусы, смены")
+    Container(pricing_service, "Pricing Service", "Microservice", "Расчёт стоимости поездки и динамическое ценообразование")
+    Container(payment_service, "Payments Service", "Microservice", "Оплаты, возвраты, выплаты водителям")
+    Container(notification_service, "Notification Service", "Microservice", "Push-уведомления пассажирам и водителям")
+    Container(geography_service, "Geography Service", "Microservice", "Геокодинг, маршруты, зоны, работа с картами")
+    Container(fraud_service, "Fraud Service", "Microservice", "Антифрод-проверки поездок, платежей и пользователей")
+    Container(analytics_service, "Analytics Service", "Microservice", "Сбор событий, real-time аналитика, отчёты и ML-пайплайны")
+
+    ContainerQueue(event_bus, "Message Broker", "RabbitMQ", "AMQP: асинхронный обмен событиями между сервисами")
+
+    Container(observability, "Observability Platform", "Prometheus / Grafana / Loki / Alertmanager", "Метрики, логи, алерты")
+    Container(etl_pipeline, "Data Pipelines", "Spark / Flink", "ETL и потоковая обработка данных")
+
+    ContainerDb(booking_db, "Booking DB", "PostgreSQL", "Поездки и статусы поездок")
+    ContainerDb(driver_db, "Driver DB", "PostgreSQL / Redis", "Профили, статусы и доступность водителей")
+    ContainerDb(pricing_db, "Pricing DB", "PostgreSQL / Redis", "Тарифы, коэффициенты, правила ценообразования")
+    ContainerDb(payment_db, "Payments DB", "PostgreSQL", "Платёжные транзакции, возвраты, выплаты")
+    ContainerDb(notification_db, "Notification DB", "PostgreSQL", "Шаблоны, статусы доставки уведомлений")
+    ContainerDb(geography_db, "Geography DB", "PostgreSQL / Elasticsearch", "Геозоны, маршруты, геопоиск")
+    ContainerDb(fraud_db, "Fraud DB", "PostgreSQL", "Правила, риск-оценки, результаты проверок")
+    ContainerDb(analytics_db, "Analytics DB", "ClickHouse", "События, витрины данных, аналитические отчёты")
+}
+
+System_Ext(payment_provider, "Local Payment Providers", "Яндекс Пэй, локальные платёжные шлюзы")
+System_Ext(bank_api, "Bank APIs", "Банковские API для выплат водителям")
+System_Ext(map_provider, "Map Providers", "Яндекс Карты и локальные картографические сервисы")
+System_Ext(push_provider, "Push Providers", "FCM / APNS / Huawei Push Kit")
+System_Ext(datalens, "DataLens", "BI-инструмент для аналитики")
+
+' --- Пользователи ---
+Rel(passenger, passenger_app, "Использует")
+Rel(driver, driver_app, "Использует")
+Rel(corporate_client, corporate_portal, "Использует")
+Rel(partner, api_gateway, "Использует публичные API", "HTTPS/REST")
+
+' --- Клиенты -> Gateway ---
+Rel(passenger_app, api_gateway, "HTTPS/REST")
+Rel(driver_app, api_gateway, "HTTPS/REST")
+Rel(corporate_portal, api_gateway, "HTTPS/REST")
+
+' --- Обратная совместимость ---
+Rel(api_gateway, legacy_adapter, "Маршрутизирует legacy API", "HTTPS/REST")
+Rel(legacy_adapter, legacy_monolith, "Проксирует старые сценарии", "HTTP/REST")
+Rel(legacy_adapter, booking_service, "Перенаправляет новые сценарии", "HTTP/REST")
+Rel(legacy_adapter, driver_service, "Перенаправляет новые сценарии", "HTTP/REST")
+Rel(legacy_adapter, pricing_service, "Перенаправляет новые сценарии", "HTTP/REST")
+Rel(legacy_adapter, payment_service, "Перенаправляет новые сценарии", "HTTP/REST")
+
+' --- Gateway -> Доменные сервисы ---
+Rel(api_gateway, booking_service, "REST", "Создание поездки, статус, отмена")
+Rel(api_gateway, driver_service, "REST", "Профиль, доступность, смена статуса")
+Rel(api_gateway, pricing_service, "REST", "Расчёт стоимости поездки")
+Rel(api_gateway, payment_service, "REST", "Оплата, возврат, история платежей")
+Rel(api_gateway, geography_service, "REST", "Адреса, маршруты, зоны")
+Rel(api_gateway, notification_service, "REST", "Пользовательские настройки уведомлений")
+Rel(api_gateway, fraud_service, "REST", "Риск-оценки, правила антифрода")
+Rel(api_gateway, analytics_service, "REST", "Отчёты и аналитика")
+
+' --- Сервисы -> БД ---
+Rel(booking_service, booking_db, "R/W")
+Rel(driver_service, driver_db, "R/W")
+Rel(pricing_service, pricing_db, "R/W")
+Rel(payment_service, payment_db, "R/W")
+Rel(notification_service, notification_db, "R/W")
+Rel(geography_service, geography_db, "R/W")
+Rel(fraud_service, fraud_db, "R/W")
+Rel(analytics_service, analytics_db, "R/W")
+
+' --- Событийные потоки ---
+Rel(booking_service, event_bus, "Публикует", "RideRequested, RideAccepted, RideStarted, RideCompleted, RideCancelled")
+Rel(driver_service, event_bus, "Публикует", "DriverAvailable, DriverAssigned, DriverStatusChanged")
+Rel(pricing_service, event_bus, "Публикует", "PriceCalculated, SurgePriceChanged")
+Rel(payment_service, event_bus, "Публикует", "PaymentSucceeded, PaymentFailed, PayoutCreated")
+Rel(geography_service, event_bus, "Публикует", "RouteCalculated, ZoneUpdated")
+Rel(fraud_service, event_bus, "Публикует", "FraudCheckPassed, FraudCheckFailed")
+Rel(notification_service, event_bus, "Публикует", "NotificationSent, NotificationFailed")
+
+Rel(event_bus, booking_service, "Потребляет", "DriverAssigned, PriceCalculated, PaymentSucceeded, PaymentFailed, FraudCheckPassed/Failed")
+Rel(event_bus, driver_service, "Потребляет", "RideRequested, RideCompleted, RideCancelled")
+Rel(event_bus, pricing_service, "Потребляет", "RideRequested, DriverAvailable, ZoneUpdated")
+Rel(event_bus, payment_service, "Потребляет", "RideCompleted")
+Rel(event_bus, fraud_service, "Потребляет", "RideRequested, PaymentSucceeded, PaymentFailed")
+Rel(event_bus, notification_service, "Потребляет", "RideAccepted, RideCancelled, PaymentSucceeded, PaymentFailed")
+Rel(event_bus, analytics_service, "Потребляет", "Все доменные события")
+
+' --- Аналитика и мониторинг ---
+Rel(event_bus, etl_pipeline, "Потребляет", "Доменные события")
+Rel(etl_pipeline, analytics_db, "R/W")
+Rel(datalens, analytics_db, "SQL", "BI-отчёты")
+
+Rel(booking_service, observability, "Метрики / логи")
+Rel(driver_service, observability, "Метрики / логи")
+Rel(pricing_service, observability, "Метрики / логи")
+Rel(payment_service, observability, "Метрики / логи")
+Rel(notification_service, observability, "Метрики / логи")
+Rel(geography_service, observability, "Метрики / логи")
+Rel(fraud_service, observability, "Метрики / логи")
+Rel(analytics_service, observability, "Метрики / логи")
+Rel(legacy_monolith, observability, "Метрики / логи")
+Rel(event_bus, observability, "Метрики очередей")
+
+' --- Внешние интеграции ---
+Rel(payment_service, payment_provider, "HTTPS/API", "Оплаты и возвраты")
+Rel(payment_service, bank_api, "HTTPS/API", "Выплаты водителям")
+Rel(geography_service, map_provider, "HTTPS/API", "Геокодинг, маршруты, карты")
+Rel(notification_service, push_provider, "HTTPS/API", "Push-уведомления")
+
+
+@enduml
