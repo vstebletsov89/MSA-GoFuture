@@ -68,3 +68,18 @@ Data pipelines — ETL-processes.
 Картографический сервис — Яндекс Карты.
 Push-уведомления — Firebase Cloud Messaging (FCM) для Android, Apple Push Notification Service (APNS) для iOS и Huawei Push Kit для Huawei-устройств.
 Банковские API — интеграции с банками для выплат.
+
+Клиентские приложения
+Мобильные приложения
+iOS Native (Swift/Objective-C).
+Android Native (Kotlin/Java).
+Huawei Mobile Services.
+Веб-приложения
+Корпоративный портал (React/Vue.js и Django).
+Админ-панель (Django Admin).
+Сетевые протоколы и коммуникация
+Синхронные вызовы — HTTP/REST.
+Асинхронные вызовы — AMQP (RabbitMQ).
+Метрики — Prometheus Metrics.
+Логи — Loki Logs API.
+Базы данных — SQL, ORM и прямые подключения.
