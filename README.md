@@ -25,3 +25,46 @@ SRE-команда отвечает за надёжность, планиров�
 Data-инженеры занимаются аналитикой в режиме реального времени, ML-пайплайнами и data governance.
 Архитектурный комитет формирует техническую стратегию и стандарты, а также проводит code review.
 Инфраструктурная команда управляет оборудованием, VMware, Docker и выполняет ручное масштабирование по алертам.
+
+Какие технологии и системы используются
+Основной стек приложения
+Backend Framework — Django (Python).
+Task Queue — Celery.
+Message Broker — RabbitMQ.
+Application Server — Gunicorn/uWSGI.
+API — REST API.
+Базы данных и хранилища
+Основная БД — PostgreSQL RDS.
+Поисковый движок — Elasticsearch.
+Кеширование — Redis.
+Аналитическая БД — ClickHouse.
+Хранилище образов — Docker Registry.
+Инфраструктура и платформа
+Cloud Provider — Yandex Cloud.
+Compute — EC2 instances.
+Containerization — Docker.
+Orchestration — Docker Compose (базовое).
+Load Balancing — AWS ELB/ALB.
+Мониторинг и observability
+Метрики — Prometheus.
+Визуализация — Grafana.
+Логи — Loki.
+Алертинг — Alertmanager.
+Метрики БД — PostgreSQL Exporter.
+Метрики очередей — RabbitMQ Exporter.
+CI/CD-пайплайн
+CI/CD Server — Jenkins.
+Сборка — Docker builds.
+Артефакты — Docker Registry.
+Воркеры сборки — VM/Containers.
+Деплой — Docker-based deployment.
+Аналитика и BI
+Обработка данных — Spark/Flink.
+Хранилище данных — ClickHouse.
+BI-инструмент — DataLens.
+Data pipelines — ETL-processes.
+Внешние интеграции и API
+Платёжный шлюз — Яндекс Пэй.
+Картографический сервис — Яндекс Карты.
+Push-уведомления — Firebase Cloud Messaging (FCM) для Android, Apple Push Notification Service (APNS) для iOS и Huawei Push Kit для Huawei-устройств.
+Банковские API — интеграции с банками для выплат.
