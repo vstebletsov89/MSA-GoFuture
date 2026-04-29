@@ -47,25 +47,36 @@ GoFuture выходит на рынки Юго-Восточной Азии и Ю
 
 ### 2. Geo-routing
 
-Используется **Global Edge Platform**:
+Используется **Global Edge Platform** (Cloudflare / Global Traffic Manager):
 
-- GeoDNS + latency routing;
-- health checks;
-- автоматическое переключение региона;
-- Anycast сеть.
+- GeoDNS + latency-based routing;
+- Anycast сеть;
+- health checks региональных API Gateway;
+- автоматическое исключение деградировавшего региона;
+- WAF, DDoS protection, rate limiting.
+
+Поток трафика:
+
+User -> Global Edge Platform -> WAF / DDoS protection -> Regional Firewall -> ближайший healthy API Gateway
 
 ---
 
 ### 3. Репликация
 
-#### PostgreSQL
-- async logical replication;
-- primary -> replica;
-- eventual consistency.
+| Данные | Модель репликации | Обоснование |
+| :- | :- | :- |
+| Booking | Regional primary + async replication | Поездка имеет одного владельца записи в домашнем регионе |
+| Payments | Regional primary + async replication + audit log | Платежи требуют идемпотентности и трассируемости |
+| Driver location | Event-driven replication | Высокочастотные события, важна низкая задержка |
+| Pricing | Локальные stream aggregates | Цена считается на основе локального спроса и предложения |
+| Analytics | Async event replication | Аналитика допускает задержку |
+| Reference data | Multi-region replication | Справочники нужны во всех регионах |
 
-#### Kafka
-- MirrorMaker 2;
-- репликация топиков между регионами.
+Механизмы:
+
+- PostgreSQL async logical replication;
+- Kafka MirrorMaker 2 / Cluster Linking;
+- Transactional Outbox + CDC для надёжной публикации событий.
 
 ---
 
@@ -80,23 +91,28 @@ GoFuture выходит на рынки Юго-Восточной Азии и Ю
 
 ### 5. Сценарии отказа
 
-| Сценарий | Реакция системы |
-| :- | :- |
-| Регион недоступен | Geo-routing переключает трафик |
-| API недоступен | traffic reroute |
-| DB отказ | replica promotion |
-| Kafka недоступен | fallback на другой регион |
+| Сценарий | Детекция | Реакция системы |
+| :- | :- | :- |
+| Регион недоступен | health checks / synthetic monitoring | Geo-routing переключает трафик в DR-регион |
+| API Gateway недоступен | 5xx / latency p95-p99 | регион исключается из маршрутизации |
+| PostgreSQL primary недоступен | DB health check / replication lag | promotion replica -> primary |
+| Kafka недоступен | broker health / consumer lag | переключение на региональную реплику Kafka |
+| Stream processing деградировал | processing lag | restart job + replay событий |
+| Payment provider недоступен | payment error rate | circuit breaker + fallback provider |
+| WAF / Edge деградировал | edge health checks | переключение на резервный edge / fallback routing |
 
 ---
 
 ### 6. Безопасность
 
-Edge layer включает:
+Edge и сетевой слой включают:
 
 - DDoS protection;
 - WAF;
 - rate limiting;
-- TLS termination.
+- TLS termination;
+- Regional Firewall / Security Groups;
+- private networking между сервисами.
 
 ---
 
