@@ -1,0 +1,60 @@
+@startuml C2_GoFuture_Multitenant_Platform
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Multi-Tenant Platform (Database-per-Tenant)
+
+Person(partner_admin, "Partner Admin", "Управляет tenant")
+Person(platform_admin, "Platform Admin", "Onboarding партнёров")
+Person(api_client, "API Client", "Интеграции")
+
+System_Ext(sso, "SSO Provider", "OIDC / SAML")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    Container(api_gateway, "API Gateway", "NGINX / Envoy", "Tenant-aware routing")
+    Container(iam, "IAM Service", "Keycloak", "SSO, RBAC")
+    Container(onboarding, "Onboarding Service", "Microservice", "Provision tenant")
+
+    Container(booking_service, "Booking Service", "Microservice", "Tenant-aware")
+    Container(driver_service, "Driver Service", "Microservice", "Tenant-aware")
+    Container(payment_service, "Payment Service", "Microservice", "Tenant-aware")
+
+    ContainerQueue(kafka, "Kafka", "Events with tenant_id")
+
+    ContainerDb(tenant_registry, "Tenant Registry", "PostgreSQL", "Tenant metadata")
+    ContainerDb(tenant_db, "Tenant Databases", "PostgreSQL", "Database-per-Tenant")
+
+    Container(observability, "Observability", "Prometheus / Grafana", "Tenant metrics")
+    Container(audit, "Audit Log", "Immutable store", "Audit events")
+}
+
+Rel(partner_admin, api_gateway, "HTTPS")
+Rel(api_client, api_gateway, "API")
+
+Rel(api_gateway, iam, "Auth")
+Rel(iam, sso, "SSO")
+
+Rel(api_gateway, booking_service, "tenant_id")
+Rel(api_gateway, driver_service, "tenant_id")
+Rel(api_gateway, payment_service, "tenant_id")
+
+Rel(onboarding, tenant_registry, "Create tenant")
+Rel(onboarding, tenant_db, "Provision DB")
+Rel(onboarding, iam, "Create roles")
+Rel(onboarding, kafka, "Create topics")
+
+Rel(booking_service, tenant_db, "R/W")
+Rel(driver_service, tenant_db, "R/W")
+Rel(payment_service, tenant_db, "R/W")
+
+Rel(booking_service, kafka, "Publish")
+Rel(driver_service, kafka, "Publish")
+Rel(payment_service, kafka, "Publish")
+
+Rel(api_gateway, observability, "Metrics per tenant")
+Rel(kafka, observability, "Lag per tenant")
+Rel(booking_service, audit, "Audit")
+Rel(payment_service, audit, "Audit")
+
+@enduml

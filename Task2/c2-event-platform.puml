@@ -1,0 +1,70 @@
+@startuml C2_GoFuture_Event_Platform
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Event-Driven Platform To-Be (C2)
+
+Person(passenger, "Пассажир", "Заказывает поездки")
+Person(driver, "Водитель", "Отправляет геопозицию и выполняет поездки")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    Container(passenger_app, "Passenger Mobile App", "iOS / Android / Huawei", "Приложение пассажира")
+    Container(driver_app, "Driver Mobile App", "iOS / Android / Huawei", "Приложение водителя")
+
+    Container(api_gateway, "API Gateway", "NGINX / Envoy", "REST API, auth, routing")
+
+    Container(booking_service, "Booking Service", "Microservice", "Жизненный цикл поездки, orchestration Saga")
+    Container(driver_service, "Driver Service", "Microservice", "Доступность и геопозиция водителей")
+    Container(pricing_service, "Pricing Service", "Microservice", "Динамическое ценообразование")
+    Container(payment_service, "Payments Service", "Microservice", "Оплаты и выплаты")
+    Container(fraud_service, "Fraud Service", "Microservice", "Антифрод-проверки")
+    Container(notification_service, "Notification Service", "Microservice", "Push-уведомления")
+    Container(analytics_service, "Analytics Service", "Microservice", "Real-time аналитика")
+
+    ContainerQueue(kafka, "Kafka Cluster", "Kafka", "Доменные события, topics с партиционированием по region_id + aggregate_id")
+    Container(stream_processing, "Stream Processing", "Kafka Streams / Flink", "Агрегаты спроса/предложения, surge pricing, fraud signals")
+
+    Container(outbox_cdc, "Outbox + CDC", "Transactional Outbox / Debezium", "Надёжная публикация событий из PostgreSQL в Kafka")
+    Container(schema_registry, "Schema Registry", "Avro / Protobuf", "Версионирование контрактов событий")
+
+    Container(observability, "Observability Platform", "Prometheus / Grafana / Loki / Alertmanager / OpenTelemetry", "Метрики, логи, трейсы, алерты")
+}
+
+Rel(passenger, passenger_app, "Использует")
+Rel(driver, driver_app, "Использует")
+
+Rel(passenger_app, api_gateway, "HTTPS/REST")
+Rel(driver_app, api_gateway, "HTTPS/REST")
+
+Rel(api_gateway, booking_service, "REST", "Создание и статус поездки")
+Rel(api_gateway, driver_service, "REST", "Статус и геопозиция водителя")
+Rel(api_gateway, pricing_service, "REST", "Расчёт цены")
+Rel(api_gateway, payment_service, "REST", "Оплата поездки")
+
+Rel(booking_service, outbox_cdc, "Пишет события", "BookingCreated, RideStarted, RideCompleted")
+Rel(driver_service, outbox_cdc, "Пишет события", "DriverLocationUpdated, DriverAvailable")
+Rel(payment_service, outbox_cdc, "Пишет события", "PaymentAuthorized, PaymentCaptured, PaymentFailed")
+Rel(outbox_cdc, kafka, "Публикует", "Доменные события")
+
+Rel(booking_service, kafka, "Публикует/потребляет", "Saga events")
+Rel(driver_service, kafka, "Публикует/потребляет", "Driver events")
+Rel(pricing_service, kafka, "Публикует/потребляет", "Pricing events")
+Rel(payment_service, kafka, "Публикует/потребляет", "Payment events")
+Rel(fraud_service, kafka, "Публикует/потребляет", "Fraud events")
+Rel(notification_service, kafka, "Потребляет", "NotificationRequested")
+Rel(analytics_service, kafka, "Потребляет", "Все доменные события")
+
+Rel(kafka, stream_processing, "Поток событий", "BookingCreated, DriverLocationUpdated, RideCompleted")
+Rel(stream_processing, pricing_service, "Обновляет агрегаты", "Demand/Supply, surge")
+Rel(stream_processing, fraud_service, "Передаёт признаки", "Fraud signals")
+Rel(stream_processing, analytics_service, "Передаёт агрегаты", "Real-time analytics")
+
+Rel(schema_registry, kafka, "Схемы событий", "Avro / Protobuf")
+Rel(kafka, observability, "Kafka metrics / consumer lag")
+Rel(stream_processing, observability, "Processing latency / errors")
+Rel(outbox_cdc, observability, "CDC lag / errors")
+Rel(booking_service, observability, "Saga metrics / traces")
+Rel(pricing_service, observability, "Pricing latency")
+
+@enduml

@@ -1,0 +1,47 @@
+@startuml C4_GoFuture_Failover
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Failover Scenario (C4)
+
+AddElementTag("task3", $bgColor="#FFCCCC", $borderColor="#FF0000", $fontColor="#990000")
+AddRelTag("task3", $lineColor="#FF0000", $textColor="#990000")
+
+Person(user, "SEA User", "Пассажир / водитель")
+
+System_Ext(edge, "Global Edge Platform", "Cloudflare / Global Traffic Manager", "GeoDNS, health checks, WAF, DDoS protection", $tags="task3")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    System_Boundary(primary, "Primary Region: SEA-1 Singapore") {
+        Container(api_primary, "API Gateway", "NGINX / Envoy", "Primary entrypoint")
+        Container(app_primary, "Domain Services", "Kubernetes", "Booking, Driver, Pricing, Payments")
+        ContainerDb(db_primary, "PostgreSQL Primary", "PostgreSQL", "Primary database")
+        Container(kafka_primary, "Kafka Primary", "Kafka", "Primary event streaming")
+    }
+
+    System_Boundary(failover, "Failover Region: SEA-2 Jakarta") {
+        Container(api_failover, "API Gateway", "NGINX / Envoy", "Failover entrypoint")
+        Container(app_failover, "Domain Services", "Kubernetes", "Booking, Driver, Pricing, Payments")
+        ContainerDb(db_failover, "PostgreSQL Replica", "PostgreSQL", "Promoted to primary during failover")
+        Container(kafka_failover, "Kafka Replica", "Kafka", "Replicated event streaming")
+    }
+}
+
+Rel(user, edge, "HTTPS request", $tags="task3")
+
+Rel(edge, api_primary, "Normal route", "healthy SEA-1", $tags="task3")
+Rel(edge, api_failover, "Failover route", "when SEA-1 health check fails", $tags="task3")
+
+Rel(api_primary, app_primary, "REST/gRPC")
+Rel(app_primary, db_primary, "Read/Write")
+Rel(app_primary, kafka_primary, "Publish / consume events")
+
+Rel(api_failover, app_failover, "REST/gRPC")
+Rel(app_failover, db_failover, "Read/Write after promotion")
+Rel(app_failover, kafka_failover, "Publish / consume events")
+
+Rel(db_primary, db_failover, "Async replication", "RPO <= 5 min", $tags="task3")
+Rel(kafka_primary, kafka_failover, "Topic replication", "MirrorMaker / Cluster Linking", $tags="task3")
+
+@enduml

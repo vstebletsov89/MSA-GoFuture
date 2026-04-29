@@ -1,0 +1,67 @@
+@startuml C4_GoFuture_Data_Platform
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Data Platform for ML and BI (C4)
+
+Person(data_analyst, "Data Analyst", "Использует BI-дашборды")
+Person(data_scientist, "Data Scientist", "Обучает и анализирует ML-модели")
+Person(ml_model, "ML Model Consumer", "Pricing / Fraud / Demand services")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    Container(booking_service, "Booking Service", "Microservice", "События поездок")
+    Container(driver_service, "Driver Service", "Microservice", "События водителей и геопозиции")
+    Container(pricing_service, "Pricing Service", "Microservice", "События ценообразования")
+    Container(payment_service, "Payments Service", "Microservice", "Платёжные события")
+    Container(fraud_service, "Fraud Service", "Microservice", "Антифрод-события")
+    Container(geography_service, "Geography Service", "Microservice", "Геозоны и маршруты")
+    Container(notification_service, "Notification Service", "Microservice", "События уведомлений")
+
+    Container(outbox_cdc, "Outbox + CDC", "Transactional Outbox / Debezium", "Надёжная публикация событий")
+    ContainerQueue(kafka, "Kafka Cluster", "Kafka", "Доменные события")
+    Container(schema_registry, "Schema Registry", "Avro / Protobuf", "Контроль схем событий")
+
+    Container(stream_processing, "Stream Processing", "Flink / Spark Streaming", "Очистка, агрегация, feature engineering")
+    Container(data_quality, "Data Quality Service", "Great Expectations / custom checks", "Валидация, freshness, completeness, deduplication")
+
+    ContainerDb(data_lake, "Data Lake", "Object Storage", "Сырые исторические события")
+    ContainerDb(clickhouse, "Analytics DB", "ClickHouse", "Аналитические витрины")
+    Container(feature_store, "Feature Store", "Feast / Custom", "Online/offline признаки для ML")
+
+    Container(ml_platform, "ML Platform", "MLflow / Kubeflow", "Training, model registry, deployment")
+    Container(bi, "BI Tool", "DataLens", "Дашборды и отчёты")
+
+    Container(observability, "Observability", "Prometheus / Grafana / Loki / Alertmanager", "Метрики пайплайнов, DQ, lag, ошибки")
+}
+
+Rel(booking_service, outbox_cdc, "Пишет события", "BookingCreated, RideCompleted")
+Rel(driver_service, outbox_cdc, "Пишет события", "DriverLocationUpdated")
+Rel(pricing_service, outbox_cdc, "Пишет события", "PriceCalculated")
+Rel(payment_service, outbox_cdc, "Пишет события", "PaymentCaptured, PaymentFailed")
+Rel(fraud_service, outbox_cdc, "Пишет события", "FraudCheckPassed/Failed")
+Rel(geography_service, outbox_cdc, "Пишет события", "RouteCalculated, ZoneDemandChanged")
+Rel(notification_service, outbox_cdc, "Пишет события", "NotificationSent, NotificationFailed")
+
+Rel(outbox_cdc, kafka, "Публикует события")
+Rel(schema_registry, kafka, "Схемы событий")
+
+Rel(kafka, stream_processing, "Поток событий")
+Rel(stream_processing, data_quality, "Передаёт очищенные данные")
+Rel(data_quality, data_lake, "Raw / validated events")
+Rel(data_quality, clickhouse, "Аналитические витрины")
+Rel(data_quality, feature_store, "ML features")
+
+Rel(feature_store, ml_platform, "Training / inference features")
+Rel(ml_platform, ml_model, "Публикует модели / scores")
+Rel(clickhouse, bi, "SQL")
+Rel(data_lake, ml_platform, "Исторические данные")
+Rel(bi, data_analyst, "Дашборды")
+Rel(ml_platform, data_scientist, "Эксперименты / модели")
+
+Rel(stream_processing, observability, "Pipeline lag / errors")
+Rel(data_quality, observability, "DQ metrics")
+Rel(kafka, observability, "Consumer lag / throughput")
+Rel(ml_platform, observability, "Training / serving metrics")
+
+@enduml
