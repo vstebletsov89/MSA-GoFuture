@@ -67,13 +67,14 @@ GoFuture запускается в новых регионах через кру
 
 ### 2. IAM
 
-Централизованный IAM:
+IAM является shared platform-компонентом, но изоляция обеспечивается через:
 
-- OIDC / SAML (SSO);
-- RBAC;
-- tenant-scoped permissions;
-- service accounts для API;
-- audit log.
+- отдельные realm / organization / tenant namespace для каждого партнёра;
+- tenant-scoped roles и permissions;
+- запрет cross-tenant access на уровне policies;
+- `tenant_id` claim в access token;
+- audit log всех действий;
+- отдельные service accounts для интеграций каждого tenant.
 
 JWT содержит:
 
@@ -198,4 +199,4 @@ Database-per-Tenant выбран, потому что:
 ## Компромиссы
 
 - увеличена сложность ради безопасности;
-- централизованный IAM остаётся shared.
+- централизованный IAM остаётся shared, но доступы, роли и политики строго изолированы по `tenant_id`
