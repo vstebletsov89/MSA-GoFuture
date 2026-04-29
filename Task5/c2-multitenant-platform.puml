@@ -1,0 +1,86 @@
+@startuml C2_GoFuture_Multitenant_Platform
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Multi-Tenant Platform (C2)
+
+Person(partner_admin, "Partner Admin", "Управляет пользователями и настройками своего tenant")
+Person(partner_user, "Partner User", "Работает с поездками, отчётами и интеграциями")
+Person(platform_admin, "Platform Admin", "Управляет платформой и onboarding партнёров")
+Person(api_client, "Partner API Client", "Интегрируется с платформой через API")
+
+System_Ext(sso_provider, "External IdP / SSO", "OIDC / SAML", "Корпоративный SSO партнёров")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    Container(partner_portal, "Partner Portal", "React / Vue.js", "Управление tenant, пользователями, настройками")
+    Container(api_gateway, "API Gateway", "NGINX / Envoy", "Tenant-aware routing, auth, rate limiting")
+
+    Container(iam, "IAM Service", "Keycloak / OIDC", "SSO, RBAC, tenant-scoped permissions")
+    Container(onboarding, "Partner Onboarding Service", "Microservice", "Автоматическое подключение новых партнёров")
+    Container(config_service, "Tenant Config Service", "Microservice", "Feature flags, branding, региональные настройки")
+
+    Container(booking_service, "Booking Service", "Microservice", "Tenant-aware поездки")
+    Container(driver_service, "Driver Service", "Microservice", "Tenant-aware водители")
+    Container(payment_service, "Payments Service", "Microservice", "Tenant-aware платежи")
+    Container(analytics_service, "Analytics Service", "Microservice", "Tenant-scoped отчёты")
+
+    ContainerQueue(kafka, "Kafka Cluster", "Kafka", "Доменные события с tenant_id в headers/key")
+    Container(audit_log, "Audit Log Store", "Immutable Log", "Аудит действий пользователей и сервисов")
+
+    ContainerDb(tenant_registry, "Tenant Registry", "PostgreSQL", "Tenant metadata, regions, isolation model")
+    ContainerDb(shared_db, "Shared Tenant DB", "PostgreSQL + RLS", "Данные малых tenant с row-level isolation")
+    ContainerDb(dedicated_db, "Dedicated Tenant DB", "PostgreSQL", "Отдельные схемы/БД для крупных tenant")
+    ContainerDb(analytics_db, "Analytics DB", "ClickHouse", "Tenant-scoped витрины и BI")
+
+    Container(observability, "Tenant Observability", "Prometheus / Grafana / Loki / Alertmanager / OpenTelemetry", "Tenant-level metrics, logs, traces, alerts")
+}
+
+Rel(partner_admin, partner_portal, "HTTPS")
+Rel(partner_user, partner_portal, "HTTPS")
+Rel(platform_admin, partner_portal, "HTTPS")
+Rel(api_client, api_gateway, "HTTPS/API")
+
+Rel(partner_portal, api_gateway, "HTTPS/REST")
+Rel(api_gateway, iam, "Validate token / permissions")
+Rel(iam, sso_provider, "Federated login", "OIDC / SAML")
+
+Rel(api_gateway, booking_service, "REST", "tenant_id context")
+Rel(api_gateway, driver_service, "REST", "tenant_id context")
+Rel(api_gateway, payment_service, "REST", "tenant_id context")
+Rel(api_gateway, analytics_service, "REST", "tenant_id context")
+Rel(api_gateway, onboarding, "REST", "Create tenant")
+Rel(api_gateway, config_service, "REST", "Tenant config")
+
+Rel(onboarding, tenant_registry, "Create tenant record")
+Rel(onboarding, iam, "Create realm / roles / groups")
+Rel(onboarding, shared_db, "Configure RLS / schema")
+Rel(onboarding, dedicated_db, "Provision DB/schema")
+Rel(onboarding, kafka, "Create topics / ACL")
+Rel(onboarding, config_service, "Create feature flags")
+Rel(onboarding, observability, "Create dashboards / alerts")
+Rel(onboarding, audit_log, "Write audit events")
+
+Rel(booking_service, shared_db, "R/W", "small tenants")
+Rel(driver_service, shared_db, "R/W", "small tenants")
+Rel(payment_service, dedicated_db, "R/W", "strategic tenants")
+Rel(analytics_service, analytics_db, "R/W")
+
+Rel(booking_service, kafka, "Publish events", "tenant_id")
+Rel(driver_service, kafka, "Publish events", "tenant_id")
+Rel(payment_service, kafka, "Publish events", "tenant_id")
+Rel(kafka, analytics_service, "Consume events", "tenant_id")
+
+Rel(iam, audit_log, "Auth / permission events")
+Rel(api_gateway, audit_log, "API access events")
+Rel(booking_service, audit_log, "Business audit events")
+Rel(payment_service, audit_log, "Payment audit events")
+
+Rel(api_gateway, observability, "Requests / latency / 5xx by tenant")
+Rel(iam, observability, "Login failures / denied access")
+Rel(kafka, observability, "Consumer lag by tenant")
+Rel(onboarding, observability, "Provisioning status")
+Rel(shared_db, observability, "RLS violations / DB metrics")
+Rel(dedicated_db, observability, "DB metrics")
+
+@enduml
