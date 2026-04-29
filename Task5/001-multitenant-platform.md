@@ -9,17 +9,21 @@
 
 ## Контекст
 
-GoFuture должна быстро подключать партнёров в новых регионах с полной изоляцией данных и возможностью кастомизации функциональности.
+GoFuture запускается в новых регионах через крупных партнёров-перевозчиков.
 
-Партнёрами могут быть:
+Характеристики tenant:
 
-- локальные сервисы такси;
-- банки;
-- e-commerce партнёры;
-- корпоративные клиенты;
-- региональные операторы.
+- десятки партнёров;
+- десятки тысяч водителей на партнёра;
+- сотни тысяч поездок;
+- строгие требования к изоляции данных и compliance.
 
-Требуется обеспечить безопасную мультитенантную модель, централизованный IAM, автоматизированный onboarding и мониторинг по каждому tenant.
+Требуется:
+
+- безопасная мультитенантная архитектура;
+- централизованный IAM с SSO;
+- быстрый onboarding новых партнёров;
+- мониторинг на уровне tenant.
 
 ---
 
@@ -27,12 +31,12 @@ GoFuture должна быстро подключать партнёров в н
 
 | **№** | **Требование** |
 | :-: | :- |
-| 1 | Изоляция данных между партнёрами |
+| 1 | Полная изоляция данных между партнёрами |
 | 2 | IAM с SSO и RBAC |
-| 3 | Автоматизированный onboarding партнёров |
-| 4 | Возможность кастомизации функциональности |
-| 5 | Мониторинг tenant-level метрик |
-| 6 | Аудит действий пользователей и сервисов |
+| 3 | Автоматизированный onboarding |
+| 4 | Tenant-level мониторинг |
+| 5 | Audit действий пользователей и сервисов |
+| 6 | Возможность кастомизации |
 
 ---
 
@@ -40,145 +44,137 @@ GoFuture должна быстро подключать партнёров в н
 
 ### 1. Модель мультитенантности
 
-Выбрана гибридная модель:
+Выбрана модель **Database-per-Tenant**.
 
-| Уровень | Модель |
-| :- | :- |
-| Application | `tenant_id` в каждом запросе и событии |
-| API | tenant-aware routing через API Gateway |
-| Data | отдельная схема / БД для крупных tenant, row-level isolation для малых tenant |
-| Events | `tenant_id` в key/header каждого события |
-| Observability | метрики, логи и алерты размечаются `tenant_id` |
+Каждый tenant получает:
 
-Для стратегических партнёров используется **database/schema per tenant**.  
-Для малых партнёров допускается **shared database + row-level security**.
+- отдельную базу данных;
+- отдельные credentials;
+- отдельные backup / restore;
+- отдельные resource limits;
+- изоляцию на уровне хранения данных.
+
+Дополнительно используется `tenant_id`:
+
+- в JWT;
+- в Kafka событиях;
+- в логах и метриках;
+- в audit.
+
+Назначение `tenant_id` — трассировка, а не изоляция.
 
 ---
 
 ### 2. IAM
 
-Используется централизованная IAM-система:
+Централизованный IAM:
 
-- SSO через OIDC / SAML;
-- RBAC для ролей;
+- OIDC / SAML (SSO);
+- RBAC;
 - tenant-scoped permissions;
-- service accounts для интеграций;
-- audit log для действий пользователей и сервисов.
+- service accounts для API;
+- audit log.
 
-JWT / access token содержит:
+JWT содержит:
 
-- `tenant_id`;
-- `user_id`;
-- `roles`;
-- `permissions`;
-- `region`;
-- `partner_type`.
+- `tenant_id`
+- `roles`
+- `permissions`
+- `region`
 
 ---
 
 ### 3. Onboarding партнёра
 
-Onboarding выполняется через Partner Onboarding Service.
+Процесс автоматизирован:
 
-Процесс:
-
-1. Создание tenant record.
-2. Назначение региона и модели изоляции данных.
-3. Создание IAM realm / groups / roles.
-4. Создание схемы БД или настройка RLS.
-5. Создание Kafka topics / ACL.
-6. Создание feature flags и конфигурации партнёра.
-7. Настройка dashboards и alerts.
-8. Выпуск API credentials / service accounts.
-9. Smoke tests.
-10. Активация tenant.
+1. Создание tenant (Tenant Registry)
+2. Provision DB (Database-per-Tenant)
+3. Создание IAM realm / roles
+4. Создание Kafka topics + ACL
+5. Настройка feature flags
+6. Настройка monitoring dashboards
+7. Генерация API credentials
+8. Smoke tests
+9. Активация tenant
 
 ---
 
 ### 4. Кастомизация
 
-Кастомизация выполняется через:
+Реализуется через:
 
 - feature flags;
-- tenant-specific configuration;
-- pricing rules per tenant;
-- branding и настройки корпоративного портала;
-- региональные payment/map integrations.
+- tenant configuration;
+- pricing rules;
+- региональные интеграции.
 
-Кодовая база сервисов остаётся общей, различия выносятся в конфигурацию.
+Без форка кодовой базы.
 
 ---
 
 ### 5. Мониторинг
 
-Мониторинг выполняется на уровне платформы и tenant.
+Мониторинг tenant-aware:
 
 | Уровень | Метрики |
 | :- | :- |
-| Platform | availability, latency, error rate, saturation |
-| Tenant | requests, active rides, payment success rate, SLA |
-| IAM | login failures, token errors, permission denied |
-| Onboarding | provisioning duration, failed steps |
-| Data | data isolation violations, replication lag |
-| Kafka | consumer lag by tenant, DLQ events |
+| Platform | availability, latency |
+| Tenant | rides, payments, SLA |
+| IAM | login failures |
+| Kafka | lag per tenant |
+| DB | connections, load per tenant |
+| Onboarding | provisioning time |
 
 Инструменты:
 
-- Prometheus;
-- Grafana;
-- Loki;
-- Alertmanager;
-- OpenTelemetry;
-- Audit Log Store.
+- Prometheus
+- Grafana
+- Loki
+- Alertmanager
+- OpenTelemetry
 
 ---
 
-## Таблица ролей и доступов
+## Таблица ролей
 
-| Роль | Доступ к данным | Возможности |
+| Роль | Доступ | Возможности |
 | :- | :- | :- |
-| Platform Admin | Все tenant, все регионы | Управление платформой, настройками, инцидентами |
-| Partner Admin | Только свой tenant | Управление пользователями, настройками, интеграциями |
-| Partner Operator | Только свой tenant | Просмотр поездок, водителей, операций |
-| Finance Manager | Финансовые данные своего tenant | Платежи, выплаты, отчёты |
-| Support Agent | Ограниченный доступ своего tenant | Поиск поездок, помощь пользователям |
-| Data Analyst | Обезличенные данные своего tenant | BI-отчёты и аналитика |
-| Developer / API Client | Только разрешённые API | Интеграции через service account |
-| Auditor | Read-only audit logs | Проверка действий и соответствия требованиям |
+| Platform Admin | Все tenant | Управление платформой |
+| Partner Admin | Свой tenant | Управление пользователями |
+| Operator | Свой tenant | Операционные задачи |
+| Finance | Финансы tenant | Платежи и отчёты |
+| Support | Ограниченный | Поддержка |
+| Analyst | Обезличенные данные | BI |
+| API Client | Ограниченный | Интеграции |
+| Auditor | Read-only | Аудит |
 
 ---
 
 ## Альтернативы
 
-### 1. Single-tenant deployment per partner
+### Shared DB + RLS
+❌ Риск утечки данных
 
-❌ Максимальная изоляция, но слишком высокая стоимость и долгий onboarding.
+### Schema-per-Tenant
+⚠️ Общий кластер, слабее изоляция
 
-### 2. Shared DB без tenant isolation
+### Database-per-Tenant
+✅ Выбрано
 
-❌ Дешевле, но высокий риск утечки данных между партнёрами.
-
-### 3. Только row-level security для всех tenant
-
-⚠️ Подходит для малых партнёров, но слабее для крупных стратегических клиентов.
-
-### 4. Database per tenant для всех
-
-⚠️ Сильная изоляция, но высокая операционная сложность при большом количестве tenant.
+### Single deployment per tenant
+❌ Слишком дорого
 
 ---
 
 ## Выбор
 
-Выбрана **гибридная multi-tenant модель**:
+Database-per-Tenant выбран, потому что:
 
-- крупные партнёры: schema/database per tenant;
-- малые партнёры: shared database + row-level security;
-- все сервисы tenant-aware;
-- IAM централизован;
-- onboarding автоматизирован.
-
-Такой подход балансирует безопасность, стоимость и скорость запуска новых партнёров.
+- небольшое количество tenant (5–20);
+- высокий уровень требований к безопасности;
+- упрощает compliance;
+- снижает риск cross-tenant утечек.
 
 ---
 
@@ -186,23 +182,20 @@ Onboarding выполняется через Partner Onboarding Service.
 
 ### Плюсы
 
-- Быстрый запуск партнёров в новых регионах.
-- Изоляция данных между tenant.
-- Централизованное управление доступом.
-- Единый мониторинг tenant-level SLA.
-- Возможность кастомизации без форка кодовой базы.
+- максимальная изоляция;
+- проще аудит и compliance;
+- независимые backup/restore;
+- меньше рисков безопасности.
 
-### Минусы / риски
+### Минусы
 
-- Усложняется data governance.
-- Требуется строгий контроль `tenant_id` во всех сервисах и событиях.
-- Нужно тестировать изоляцию данных.
-- Возрастает сложность IAM и onboarding pipeline.
+- выше операционная сложность;
+- больше инфраструктурных ресурсов;
+- требуется automation provisioning.
 
 ---
 
 ## Компромиссы
 
-- Принимается гибридная модель изоляции вместо одного универсального подхода.
-- Увеличивается сложность платформы ради скорости подключения партнёров.
-- Feature flags и tenant configuration требуют строгого governance.
+- увеличена сложность ради безопасности;
+- централизованный IAM остаётся shared.
