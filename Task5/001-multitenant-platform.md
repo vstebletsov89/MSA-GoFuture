@@ -118,14 +118,22 @@ JWT содержит:
 
 Мониторинг tenant-aware:
 
-| Уровень | Метрики |
-| :- | :- |
-| Platform | availability, latency |
-| Tenant | rides, payments, SLA |
-| IAM | login failures |
-| Kafka | lag per tenant |
-| DB | connections, load per tenant |
-| Onboarding | provisioning time |
+| Уровень | Метрики                               |
+| :- |:--------------------------------------|
+| Platform | availability, latency                 |
+| Tenant | rides, payments, error rate, latency p95/p99 |
+| IAM | login failures                        |
+| Kafka | consumer lag per tenant               |
+| DB | connections, load per tenant          |
+| Onboarding | provisioning time                     |
+
+Дополнительно контролируются:
+
+- DLQ events per tenant;
+- audit anomalies;
+- cross-tenant access violations (security critical);
+
+Мониторинг строится на основе SLI/SLO с алертингом через Alertmanager.
 
 Инструменты:
 
