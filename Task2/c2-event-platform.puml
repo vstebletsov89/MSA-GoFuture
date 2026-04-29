@@ -60,7 +60,7 @@ Rel(stream_processing, pricing_service, "Обновляет агрегаты", "
 Rel(stream_processing, fraud_service, "Передаёт признаки", "Fraud signals")
 Rel(stream_processing, analytics_service, "Передаёт агрегаты", "Real-time analytics")
 
-Rel(schema_registry, kafka, "Контракты событий")
+Rel(schema_registry, kafka, "Схемы событий", "Avro / Protobuf")
 Rel(kafka, observability, "Kafka metrics / consumer lag")
 Rel(stream_processing, observability, "Processing latency / errors")
 Rel(outbox_cdc, observability, "CDC lag / errors")
