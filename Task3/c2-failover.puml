@@ -1,0 +1,88 @@
+@startuml C2_GoFuture_Global
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title GoFuture — Global Multi-Region Deployment (C2)
+
+AddElementTag("task3", $bgColor="#FFCCCC", $borderColor="#FF0000", $fontColor="#990000")
+AddRelTag("task3", $lineColor="#FF0000", $textColor="#990000")
+
+Person(user_sea, "SEA User", "Пассажир / водитель в Юго-Восточной Азии")
+Person(user_sa, "SA User", "Пассажир / водитель в Южной Америке")
+
+System_Ext(edge, "Global Edge Platform", "Cloudflare / Global Traffic Manager", "GeoDNS, Global LB, DDoS protection, WAF, rate limiting", $tags="task3")
+
+System_Boundary(gofuture, "GoFuture Platform") {
+
+    Container(obs, "Global Observability", "Prometheus / Grafana / Loki / Alertmanager", "Глобальные health checks, метрики, логи и алерты", $tags="task3")
+    Container(replication, "Replication Layer", "Kafka MirrorMaker / PostgreSQL async replication", "Межрегиональная репликация событий и данных", $tags="task3")
+
+    System_Boundary(sea1, "SEA-1 Singapore") {
+        Container(api_sea1, "API Gateway SEA-1", "NGINX / Envoy", "Regional entrypoint")
+        Container(svc_sea1, "Domain Services SEA-1", "Kubernetes", "Booking, Driver, Pricing, Payments, Fraud")
+        Container(kafka_sea1, "Kafka SEA-1", "Kafka", "Regional event streaming")
+        ContainerDb(db_sea1, "PostgreSQL SEA-1", "PostgreSQL", "Primary для SEA")
+    }
+
+    System_Boundary(sea2, "SEA-2 Jakarta") {
+        Container(api_sea2, "API Gateway SEA-2", "NGINX / Envoy", "Regional entrypoint / DR")
+        Container(svc_sea2, "Domain Services SEA-2", "Kubernetes", "Booking, Driver, Pricing, Payments, Fraud")
+        Container(kafka_sea2, "Kafka SEA-2", "Kafka", "Regional event streaming")
+        ContainerDb(db_sea2, "PostgreSQL SEA-2", "PostgreSQL", "Replica / standby для SEA")
+    }
+
+    System_Boundary(sa1, "SA-1 São Paulo") {
+        Container(api_sa1, "API Gateway SA-1", "NGINX / Envoy", "Regional entrypoint")
+        Container(svc_sa1, "Domain Services SA-1", "Kubernetes", "Booking, Driver, Pricing, Payments, Fraud")
+        Container(kafka_sa1, "Kafka SA-1", "Kafka", "Regional event streaming")
+        ContainerDb(db_sa1, "PostgreSQL SA-1", "PostgreSQL", "Primary для SA")
+    }
+
+    System_Boundary(sa2, "SA-2 Santiago") {
+        Container(api_sa2, "API Gateway SA-2", "NGINX / Envoy", "Regional entrypoint / DR")
+        Container(svc_sa2, "Domain Services SA-2", "Kubernetes", "Booking, Driver, Pricing, Payments, Fraud")
+        Container(kafka_sa2, "Kafka SA-2", "Kafka", "Regional event streaming")
+        ContainerDb(db_sa2, "PostgreSQL SA-2", "PostgreSQL", "Replica / standby для SA")
+    }
+}
+
+Rel(user_sea, edge, "HTTPS", "Geo / latency routing", $tags="task3")
+Rel(user_sa, edge, "HTTPS", "Geo / latency routing", $tags="task3")
+
+Rel(edge, api_sea1, "Primary SEA traffic", "HTTPS", $tags="task3")
+Rel(edge, api_sea2, "SEA failover traffic", "HTTPS", $tags="task3")
+Rel(edge, api_sa1, "Primary SA traffic", "HTTPS", $tags="task3")
+Rel(edge, api_sa2, "SA failover traffic", "HTTPS", $tags="task3")
+
+Rel(api_sea1, svc_sea1, "REST/gRPC")
+Rel(svc_sea1, kafka_sea1, "Publish / consume events")
+Rel(svc_sea1, db_sea1, "R/W")
+
+Rel(api_sea2, svc_sea2, "REST/gRPC")
+Rel(svc_sea2, kafka_sea2, "Publish / consume events")
+Rel(svc_sea2, db_sea2, "R/W after failover")
+
+Rel(api_sa1, svc_sa1, "REST/gRPC")
+Rel(svc_sa1, kafka_sa1, "Publish / consume events")
+Rel(svc_sa1, db_sa1, "R/W")
+
+Rel(api_sa2, svc_sa2, "REST/gRPC")
+Rel(svc_sa2, kafka_sa2, "Publish / consume events")
+Rel(svc_sa2, db_sa2, "R/W after failover")
+
+Rel(kafka_sea1, replication, "Replicates events", "MirrorMaker", $tags="task3")
+Rel(replication, kafka_sea2, "SEA event replication", "MirrorMaker", $tags="task3")
+Rel(db_sea1, db_sea2, "Async DB replication", "RPO <= 5 min", $tags="task3")
+
+Rel(kafka_sa1, replication, "Replicates events", "MirrorMaker", $tags="task3")
+Rel(replication, kafka_sa2, "SA event replication", "MirrorMaker", $tags="task3")
+Rel(db_sa1, db_sa2, "Async DB replication", "RPO <= 5 min", $tags="task3")
+
+Rel(api_sea1, obs, "Health / latency / 5xx", $tags="task3")
+Rel(api_sea2, obs, "Health / latency / 5xx", $tags="task3")
+Rel(api_sa1, obs, "Health / latency / 5xx", $tags="task3")
+Rel(api_sa2, obs, "Health / latency / 5xx", $tags="task3")
+Rel(replication, obs, "Replication lag / errors", $tags="task3")
+Rel(edge, obs, "WAF / DDoS / routing metrics", $tags="task3")
+
+@enduml
